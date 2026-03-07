@@ -1,34 +1,51 @@
 # EasyGamma
-X11 display gamma control
 
-The simple GUI application for gamma control and brightness adjustment on X11, using `xrandr` as its core.
+Simple GUI for display gamma and brightness control. Works on **X11** and **Wayland** (wlroots: Sway, Hyprland, river).
 
-### Dependencies
+> **Note:** on wayland, only one app can control gamma at a time
+> if gamma does not apply, check for a running `wlsunset`, `gammastep`, or similar
 
-For **Debian**:
+## install from AUR
+
 ```bash
-libgtkmm-3.0-dev x11-xserver-utils
+yay -S easygamma-git
 ```
 
-For **Arch Linux**:
+## build from source
+
+### arch based
+
 ```bash
-gtkmm3 xorg-xrandr
+sudo pacman -S gtkmm3 cmake wayland wayland-protocols gcc
+git clone https://github.com/jahamars/EasyGamma
+cd EasyGamma
+mkdir build && cd build
+cmake ..
+make
+sudo make install
 ```
 
-### Usage
+### debian based
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/jahamars/EasyGamma
-   cd EasyGamma
-   ```
+```bash
+sudo apt install libgtkmm-3.0-dev cmake libwayland-dev wayland-protocols g++
+git clone https://github.com/jahamars/EasyGamma
+cd EasyGamma
+mkdir build && cd build
+cmake ..
+make
+sudo make install
+```
 
-2. Compile the code:
-   ```bash
-    g++ main.cpp -o EasyGamma `pkg-config gtkmm-3.0 --cflags --libs`
-   ```
+## features
 
-3. Run the program:
-   ```bash
-   ./EasyGamma
-   ```
+- presets: default, night, warm, cool, dim
+- master slider to control all channels at once
+- per-channel R/G/B sliders
+- multi-monitor support
+- settings saved to `~/.config/easygamma/settings.conf`
+
+## requirements
+
+Wayland gamma control requires a compositor that implements `wlr-gamma-control-unstable-v1`:
+Sway, Hyprland, river, and other wlroots-based compositors.

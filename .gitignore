@@ -1,0 +1,4 @@
+build/
+easygamma
+*.o
+*.pkg.tar.zst
