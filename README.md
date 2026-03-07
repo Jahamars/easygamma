@@ -16,7 +16,7 @@ yay -S easygamma-git
 ### arch based
 
 ```bash
-sudo pacman -S gtkmm3 cmake wayland wayland-protocols gcc
+sudo pacman -S gtkmm3 cmake wayland wayland-protocols gcc libayatana-appindicator
 git clone https://github.com/jahamars/EasyGamma
 cd EasyGamma
 mkdir build && cd build
@@ -28,7 +28,7 @@ sudo make install
 ### debian based
 
 ```bash
-sudo apt install libgtkmm-3.0-dev cmake libwayland-dev wayland-protocols g++
+sudo apt install libgtkmm-3.0-dev cmake libwayland-dev wayland-protocols g++ libayatana-appindicator3-dev
 git clone https://github.com/jahamars/EasyGamma
 cd EasyGamma
 mkdir build && cd build

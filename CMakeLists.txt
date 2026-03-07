@@ -11,6 +11,12 @@ pkg_check_modules(GTKMM REQUIRED gtkmm-3.0)
 pkg_check_modules(WAYLAND_CLIENT wayland-client)
 find_program(WAYLAND_SCANNER wayland-scanner)
 
+# Try ayatana-appindicator first (modern), then legacy appindicator
+pkg_check_modules(APPINDICATOR ayatana-appindicator3-0.1)
+if(NOT APPINDICATOR_FOUND)
+    pkg_check_modules(APPINDICATOR appindicator3-0.1)
+endif()
+
 set(SOURCES main.cpp)
 set(COMPILE_DEFS "")
 
@@ -43,6 +49,13 @@ else()
     message(STATUS "Wayland support: OFF (wayland-client or wayland-scanner not found)")
 endif()
 
+if(APPINDICATOR_FOUND)
+    message(STATUS "AppIndicator support: ON (${APPINDICATOR_LIBRARIES})")
+    list(APPEND COMPILE_DEFS USE_APPINDICATOR)
+else()
+    message(STATUS "AppIndicator support: OFF — falling back to Gtk::StatusIcon")
+endif()
+
 add_executable(easygamma ${SOURCES})
 
 target_include_directories(easygamma PRIVATE
@@ -58,6 +71,18 @@ if(WAYLAND_CLIENT_FOUND AND WAYLAND_SCANNER)
     target_include_directories(easygamma PRIVATE ${WAYLAND_CLIENT_INCLUDE_DIRS})
     target_link_libraries(easygamma ${WAYLAND_CLIENT_LIBRARIES})
     target_compile_definitions(easygamma PRIVATE ${COMPILE_DEFS})
+endif()
+
+if(APPINDICATOR_FOUND)
+    target_include_directories(easygamma PRIVATE ${APPINDICATOR_INCLUDE_DIRS})
+    target_link_libraries(easygamma ${APPINDICATOR_LIBRARIES})
+    target_compile_definitions(easygamma PRIVATE ${COMPILE_DEFS})
+endif()
+
+if(NOT WAYLAND_CLIENT_FOUND OR NOT WAYLAND_SCANNER)
+    if(APPINDICATOR_FOUND OR COMPILE_DEFS)
+        target_compile_definitions(easygamma PRIVATE ${COMPILE_DEFS})
+    endif()
 endif()
 
 target_compile_options(easygamma PRIVATE ${GTKMM_CFLAGS_OTHER})

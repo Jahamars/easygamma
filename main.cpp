@@ -8,8 +8,18 @@
 #include <algorithm>
 #include <cstdlib>
 
+#ifdef USE_APPINDICATOR
+#  if __has_include(<libayatana-appindicator/app-indicator.h>)
+#    include <libayatana-appindicator/app-indicator.h>
+#  else
+#    include <libappindicator/app-indicator.h>
+#  endif
+#endif
+
 namespace fs = std::filesystem;
 
+
+// ─── Backend detection ───────────────────────────────────────────────────────
 
 enum class Backend { X11, WAYLAND };
 
@@ -19,10 +29,12 @@ static Backend detect_backend() {
 }
 
 
+// ─── Config ──────────────────────────────────────────────────────────────────
+
 struct GammaConfig {
-    double red          = 1.0;
-    double green        = 1.0;
-    double blue         = 1.0;
+    double red           = 1.0;
+    double green         = 1.0;
+    double blue          = 1.0;
     int    monitor_index = 0;
 };
 
@@ -61,13 +73,15 @@ static GammaConfig load_config() {
 
     f >> r >> g >> b >> idx;
 
-    c.red          = std::clamp(r,   0.1, 1.0);
-    c.green        = std::clamp(g,   0.1, 1.0);
-    c.blue         = std::clamp(b,   0.1, 1.0);
+    c.red           = std::clamp(r,   0.1, 1.0);
+    c.green         = std::clamp(g,   0.1, 1.0);
+    c.blue          = std::clamp(b,   0.1, 1.0);
     c.monitor_index = (idx >= 0) ? idx : 0;
     return c;
 }
 
+
+// ─── X11 helpers ─────────────────────────────────────────────────────────────
 
 static std::vector<std::string> x11_get_monitors() {
     std::vector<std::string> out;
@@ -98,6 +112,8 @@ static void x11_set_gamma(const std::string& monitor, const GammaConfig& c) {
 }
 
 
+// ─── Wayland helpers ─────────────────────────────────────────────────────────
+
 #ifdef USE_WAYLAND
 extern "C" {
 #include "gamma_wayland.h"
@@ -116,6 +132,8 @@ static void wayland_set_gamma(int output_index, const GammaConfig& c) {
 }
 
 
+// ─── Presets ─────────────────────────────────────────────────────────────────
+
 struct Preset { const char* name; GammaConfig cfg; };
 
 static const Preset PRESETS[] = {
@@ -127,32 +145,58 @@ static const Preset PRESETS[] = {
 };
 
 
+// ─── Main window ─────────────────────────────────────────────────────────────
+
 class EasyGammaApp : public Gtk::Window {
 public:
     EasyGammaApp();
     ~EasyGammaApp() override;
 
+    // Called by tray "Show" action or left-click
+    void show_window();
+
 private:
+    // GTK signal overrides
+    bool on_delete_event(GdkEventAny* ev) override;
+
     void apply_current();
     void on_master_changed();
     void on_channel_changed();
     void on_preset(GammaConfig cfg);
     void on_startup_restore();
 
+    // Tray setup
+    void setup_tray();
+    // Tray menu callbacks (static so we can pass as C function pointers)
+    static void tray_on_show  (void* self);
+    static void tray_on_quit  (void* self);
+
     Backend                  backend_;
     std::vector<std::string> x11_monitors_;
     bool                     syncing_ = false;
 
-    Gtk::Box          root_       { Gtk::ORIENTATION_VERTICAL,   8 };
-    Gtk::Box          preset_row_ { Gtk::ORIENTATION_HORIZONTAL, 4 };
+    Gtk::Box          root_        { Gtk::ORIENTATION_VERTICAL,   8 };
+    Gtk::Box          preset_row_  { Gtk::ORIENTATION_HORIZONTAL, 4 };
     Gtk::ComboBoxText monitor_combo_;
-    Gtk::Scale        master_     { Gtk::ORIENTATION_HORIZONTAL };
-    Gtk::Scale        red_        { Gtk::ORIENTATION_HORIZONTAL };
-    Gtk::Scale        green_      { Gtk::ORIENTATION_HORIZONTAL };
-    Gtk::Scale        blue_       { Gtk::ORIENTATION_HORIZONTAL };
+    Gtk::Scale        master_      { Gtk::ORIENTATION_HORIZONTAL };
+    Gtk::Scale        red_         { Gtk::ORIENTATION_HORIZONTAL };
+    Gtk::Scale        green_       { Gtk::ORIENTATION_HORIZONTAL };
+    Gtk::Scale        blue_        { Gtk::ORIENTATION_HORIZONTAL };
     Gtk::Label        status_;
+
+    // ── Tray members ──────────────────────────────────────────────────────────
+#ifdef USE_APPINDICATOR
+    AppIndicator*  indicator_    = nullptr;
+    GtkWidget*     tray_menu_    = nullptr;
+#else
+    // Fallback: Gtk::StatusIcon (deprecated but universally available)
+    Glib::RefPtr<Gtk::StatusIcon> status_icon_;
+    Gtk::Menu                     tray_menu_;
+#endif
 };
 
+
+// ─── Slider row helper ───────────────────────────────────────────────────────
 
 static Gtk::Box* make_slider_row(const char* label, Gtk::Scale& s) {
     auto* row = Gtk::manage(new Gtk::Box(Gtk::ORIENTATION_HORIZONTAL, 6));
@@ -170,6 +214,8 @@ static Gtk::Box* make_slider_row(const char* label, Gtk::Scale& s) {
     return row;
 }
 
+
+// ─── Constructor ─────────────────────────────────────────────────────────────
 
 EasyGammaApp::EasyGammaApp() {
     backend_ = detect_backend();
@@ -211,8 +257,7 @@ EasyGammaApp::EasyGammaApp() {
         preset_row_.pack_start(*btn, Gtk::PACK_EXPAND_WIDGET);
     }
 
-    // Build layout — make_slider_row calls set_value(1.0) on the Scale
-    // members. Signals are NOT connected yet, so no spurious apply/save fires.
+    // Build layout
     status_.set_xalign(0.0f);
 
     root_.pack_start(preset_row_, Gtk::PACK_SHRINK);
@@ -242,8 +287,10 @@ EasyGammaApp::EasyGammaApp() {
     blue_.signal_value_changed().connect(
         sigc::mem_fun(*this, &EasyGammaApp::on_channel_changed));
 
-    // Defer config restore to first idle tick — ensures the GTK main loop is
-    // running before we call apply_current (Wayland needs wl_display_roundtrip).
+    // Setup system tray
+    setup_tray();
+
+    // Defer config restore to first idle tick
     Glib::signal_idle().connect([this]() -> bool {
         on_startup_restore();
         return false;
@@ -258,11 +305,126 @@ EasyGammaApp::~EasyGammaApp() {
 }
 
 
+// ─── Tray setup ──────────────────────────────────────────────────────────────
+
+void EasyGammaApp::setup_tray() {
+
+#ifdef USE_APPINDICATOR
+    // ── libayatana-appindicator / libappindicator path ────────────────────────
+    // Build the GTK menu (plain C API — AppIndicator requires a GtkMenu*)
+    tray_menu_ = gtk_menu_new();
+
+    GtkWidget* item_show = gtk_menu_item_new_with_label("Show");
+    GtkWidget* item_sep  = gtk_separator_menu_item_new();
+    GtkWidget* item_quit = gtk_menu_item_new_with_label("Quit");
+
+    gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu_), item_show);
+    gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu_), item_sep);
+    gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu_), item_quit);
+    gtk_widget_show_all(tray_menu_);
+
+    g_signal_connect_swapped(item_show, "activate",
+                             G_CALLBACK(tray_on_show), this);
+    g_signal_connect_swapped(item_quit, "activate",
+                             G_CALLBACK(tray_on_quit), this);
+
+    // "display-brightness-symbolic" is a standard icon name on most DEs.
+    // Falls back to "video-display" if not found.
+    indicator_ = app_indicator_new(
+        "easygamma",
+        "display-brightness-symbolic",
+        APP_INDICATOR_CATEGORY_APPLICATION_STATUS);
+
+    app_indicator_set_status(indicator_, APP_INDICATOR_STATUS_ACTIVE);
+    app_indicator_set_title (indicator_, "EasyGamma");
+    app_indicator_set_menu  (indicator_, GTK_MENU(tray_menu_));
+
+    // Left-click attention icon (optional, shows the window)
+    // Some indicator implementations don't support left-click — we handle it
+    // via a secondary icon or just rely on the menu.
+
+#else
+    // ── Gtk::StatusIcon fallback (works everywhere without extra deps) ────────
+    // Try standard icon names in order; StatusIcon handles missing icons gracefully.
+    status_icon_ = Gtk::StatusIcon::create_from_icon_name(
+        "display-brightness-symbolic");
+    if (!status_icon_)
+        status_icon_ = Gtk::StatusIcon::create_from_icon_name("video-display");
+    if (!status_icon_)
+        status_icon_ = Gtk::StatusIcon::create(Gtk::Stock::PROPERTIES);
+
+    status_icon_->set_tooltip_text("EasyGamma");
+    status_icon_->set_visible(true);
+
+    // Left-click → show window
+    status_icon_->signal_activate().connect(
+        sigc::mem_fun(*this, &EasyGammaApp::show_window));
+
+    // Right-click → popup menu
+    // Build menu items
+    auto* item_show = Gtk::manage(new Gtk::MenuItem("Show"));
+    auto* item_sep  = Gtk::manage(new Gtk::SeparatorMenuItem());
+    auto* item_quit = Gtk::manage(new Gtk::MenuItem("Quit"));
+
+    item_show->signal_activate().connect(
+        sigc::mem_fun(*this, &EasyGammaApp::show_window));
+    item_quit->signal_activate().connect([] {
+        auto app = Gtk::Application::get_default();
+        if (app) app->release();
+    });
+
+    tray_menu_.append(*item_show);
+    tray_menu_.append(*item_sep);
+    tray_menu_.append(*item_quit);
+    tray_menu_.show_all();
+
+    status_icon_->signal_popup_menu().connect(
+        [this](guint button, guint32 activate_time) {
+            tray_menu_.popup(button, activate_time);
+        });
+#endif
+}
+
+
+// ─── Tray C callbacks (static) ───────────────────────────────────────────────
+
+void EasyGammaApp::tray_on_show(void* self) {
+    reinterpret_cast<EasyGammaApp*>(self)->show_window();
+}
+
+void EasyGammaApp::tray_on_quit(void* self) {
+    (void)self;
+    // Release the hold() we set in main(), which lets the main loop exit cleanly
+    auto app = Gtk::Application::get_default();
+    if (app) app->release();
+}
+
+
+// ─── show_window ─────────────────────────────────────────────────────────────
+
+void EasyGammaApp::show_window() {
+    // Un-iconify + raise to foreground
+    present();
+    show();
+    deiconify();
+}
+
+
+// ─── Override close button — hide to tray instead of destroying ──────────────
+
+bool EasyGammaApp::on_delete_event(GdkEventAny* /*ev*/) {
+    // Returning true prevents the default destroy handler.
+    // We just hide the window; the app keeps running.
+    hide();
+    return true;
+}
+
+
+// ─── on_startup_restore ──────────────────────────────────────────────────────
+
 void EasyGammaApp::on_startup_restore() {
     GammaConfig cfg = load_config();
 
-    // Restore monitor selection. Use syncing_ to suppress apply_current during
-    // this intermediate state (sliders still at default 1.0).
     int n = static_cast<int>(monitor_combo_.get_model()->children().size());
     if (n > 0) {
         syncing_ = true;
@@ -270,18 +432,19 @@ void EasyGammaApp::on_startup_restore() {
         syncing_ = false;
     }
 
-    // Sets sliders and calls apply_current() exactly once.
     on_preset(cfg);
 }
 
+
+// ─── apply_current ───────────────────────────────────────────────────────────
 
 void EasyGammaApp::apply_current() {
     if (syncing_) return;
 
     GammaConfig c;
-    c.red          = red_.get_value();
-    c.green        = green_.get_value();
-    c.blue         = blue_.get_value();
+    c.red           = red_.get_value();
+    c.green         = green_.get_value();
+    c.blue          = blue_.get_value();
     c.monitor_index = std::max(0, monitor_combo_.get_active_row_number());
 
     if (backend_ == Backend::WAYLAND) {
@@ -303,6 +466,8 @@ void EasyGammaApp::apply_current() {
     status_.set_text(s.str());
 }
 
+
+// ─── Slider callbacks ────────────────────────────────────────────────────────
 
 void EasyGammaApp::on_master_changed() {
     if (syncing_) return;
@@ -331,8 +496,21 @@ void EasyGammaApp::on_preset(GammaConfig cfg) {
 }
 
 
+// ─── main ────────────────────────────────────────────────────────────────────
+
 int main(int argc, char* argv[]) {
-    auto app = Gtk::Application::create(argc, argv, "org.easygamma.app");
+    // APPLICATION_IS_SERVICE: the app doesn't quit when the last window closes.
+    // We manage the lifetime ourselves via the tray Quit action.
+    auto app = Gtk::Application::create(
+        argc, argv,
+        "org.easygamma.app",
+        Gio::APPLICATION_IS_SERVICE);
+
+    // hold() increments the use-count so the main loop never exits on its own
+    app->hold();
+
     EasyGammaApp window;
-    return app->run(window);
+    window.show();      // show window on first launch
+
+    return app->run();  // run without passing window — lifetime is manual
 }

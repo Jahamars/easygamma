@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=easygamma
+Comment=display gamma and brightness control
+Exec=easygamma
+Icon=easygamma
+Terminal=false
+Type=Application
+Categories=Utility;Settings;HardwareSettings;
+Keywords=gamma;brightness;display;monitor;color;
+StartupNotify=false
