@@ -1,6 +1,6 @@
-# EasyGamma
+# easygamma
 
-Simple GUI for display gamma and brightness control. Works on **X11** and **Wayland** (wlroots: Sway, Hyprland, river).
+simple GUI for display gamma and brightness control, works on **X11** and **Wayland** 
 
 > **Note:** on wayland, only one app can control gamma at a time
 > if gamma does not apply, check for a running `wlsunset`, `gammastep`, or similar
