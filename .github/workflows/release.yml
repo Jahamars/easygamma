@@ -36,15 +36,20 @@ jobs:
       - name: Install into AppDir
         run: DESTDIR=${{ github.workspace }}/AppDir cmake --install build
 
+      - name: Manually copy icon into AppDir
+        run: |
+          mkdir -p AppDir/usr/share/icons/hicolor/scalable/apps
+          cp easygamma.svg AppDir/usr/share/icons/hicolor/scalable/apps/easygamma.svg
+
       - name: Verify AppDir contents
         run: find AppDir -type f
 
       - name: Download linuxdeploy + GTK plugin
         run: |
           curl -fsSL -o linuxdeploy-x86_64.AppImage \
-            https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+            "https://github.com/linuxdeploy/linuxdeploy/releases/download/1-alpha-20240109-1/linuxdeploy-x86_64.AppImage"
           curl -fsSL -o linuxdeploy-plugin-gtk-x86_64.AppImage \
-            https://github.com/linuxdeploy/linuxdeploy-plugin-gtk/releases/download/continuous/linuxdeploy-plugin-gtk-x86_64.AppImage
+            "https://github.com/linuxdeploy/linuxdeploy-plugin-gtk/releases/download/continuous/linuxdeploy-plugin-gtk-x86_64.AppImage"
           chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-gtk-x86_64.AppImage
 
       - name: Build AppImage
@@ -56,7 +61,7 @@ jobs:
             --appdir AppDir \
             --plugin gtk \
             --desktop-file AppDir/usr/share/applications/easygamma.desktop \
-            --icon-file easygamma.svg \
+            --icon-file AppDir/usr/share/icons/hicolor/scalable/apps/easygamma.svg \
             --output appimage
 
       - name: Rename AppImage with version
