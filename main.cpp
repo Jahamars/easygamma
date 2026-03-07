@@ -344,10 +344,7 @@ void EasyGammaApp::setup_tray() {
     // via a secondary icon or just rely on the menu.
 
 #else
-    // ── Gtk::StatusIcon fallback (works everywhere without extra deps) ────────
-    // Try standard icon names in order; StatusIcon handles missing icons gracefully.
-    status_icon_ = Gtk::StatusIcon::create_from_icon_name(
-        "display-brightness-symbolic");
+    status_icon_ = Gtk::StatusIcon::create_from_icon_name("display-brightness-symbolic");
     if (!status_icon_)
         status_icon_ = Gtk::StatusIcon::create_from_icon_name("video-display");
     if (!status_icon_)
