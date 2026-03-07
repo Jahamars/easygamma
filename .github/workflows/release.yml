@@ -3,7 +3,7 @@ name: Release AppImage
 on:
   push:
     tags:
-      - 'v*'          # срабатывает на теги вида v1.0, v1.2.3 и т.д.
+      - 'v*'
 
 jobs:
   build:
@@ -36,10 +36,15 @@ jobs:
       - name: Install into AppDir
         run: DESTDIR=${{ github.workspace }}/AppDir cmake --install build
 
+      - name: Verify AppDir contents
+        run: find AppDir -type f
+
       - name: Download linuxdeploy + GTK plugin
         run: |
-          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
-          wget -q https://github.com/linuxdeploy/linuxdeploy-plugin-gtk/releases/download/continuous/linuxdeploy-plugin-gtk-x86_64.AppImage
+          curl -fsSL -o linuxdeploy-x86_64.AppImage \
+            https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          curl -fsSL -o linuxdeploy-plugin-gtk-x86_64.AppImage \
+            https://github.com/linuxdeploy/linuxdeploy-plugin-gtk/releases/download/continuous/linuxdeploy-plugin-gtk-x86_64.AppImage
           chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-gtk-x86_64.AppImage
 
       - name: Build AppImage
@@ -51,17 +56,16 @@ jobs:
             --appdir AppDir \
             --plugin gtk \
             --desktop-file AppDir/usr/share/applications/easygamma.desktop \
-            --icon-file AppDir/usr/share/icons/hicolor/scalable/apps/easygamma.svg \
+            --icon-file easygamma.svg \
             --output appimage
 
       - name: Rename AppImage with version
-        run: |
-          mv EasyGamma*.AppImage EasyGamma-${{ github.ref_name }}-x86_64.AppImage
+        run: mv EasyGamma*.AppImage EasyGamma-${{ github.ref_name }}-x86_64.AppImage
 
       - name: Create GitHub Release and upload AppImage
         uses: softprops/action-gh-release@v2
         with:
           files: EasyGamma-${{ github.ref_name }}-x86_64.AppImage
-          generate_release_notes: true   # авто-генерирует changelog из коммитов
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
