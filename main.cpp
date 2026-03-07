@@ -344,11 +344,10 @@ void EasyGammaApp::setup_tray() {
     // via a secondary icon or just rely on the menu.
 
 #else
-    status_icon_ = Gtk::StatusIcon::create_from_icon_name("display-brightness-symbolic");
-    if (!status_icon_)
-        status_icon_ = Gtk::StatusIcon::create_from_icon_name("video-display");
-    if (!status_icon_)
-        status_icon_ = Gtk::StatusIcon::create(Gtk::Stock::PROPERTIES);
+    status_icon_ = Gtk::StatusIcon::create("video-display");
+
+
+
 
     status_icon_->set_tooltip_text("EasyGamma");
     status_icon_->set_visible(true);
