@@ -36,21 +36,29 @@ jobs:
       - name: Install into AppDir
         run: DESTDIR=${{ github.workspace }}/AppDir cmake --install build
 
-      - name: Manually copy icon into AppDir
+      - name: Copy icon into AppDir
         run: |
           mkdir -p AppDir/usr/share/icons/hicolor/scalable/apps
           cp easygamma.svg AppDir/usr/share/icons/hicolor/scalable/apps/easygamma.svg
 
-      - name: Verify AppDir contents
-        run: find AppDir -type f
+      - name: Download linuxdeploy
+        uses: robinraju/release-downloader@v1
+        with:
+          repository: linuxdeploy/linuxdeploy
+          tag: 1-alpha-20251107-1
+          fileName: linuxdeploy-x86_64.AppImage
+          out-file-path: .
 
-      - name: Download linuxdeploy + GTK plugin
-        run: |
-          curl -fsSL -o linuxdeploy-x86_64.AppImage \
-            "https://github.com/linuxdeploy/linuxdeploy/releases/download/1-alpha-20251107-1/linuxdeploy-x86_64.AppImage"
-          curl -fsSL -o linuxdeploy-plugin-gtk-x86_64.AppImage \
-            "https://github.com/linuxdeploy/linuxdeploy-plugin-gtk/releases/download/continuous/linuxdeploy-plugin-gtk-x86_64.AppImage"
-          chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-gtk-x86_64.AppImage
+      - name: Download linuxdeploy GTK plugin
+        uses: robinraju/release-downloader@v1
+        with:
+          repository: linuxdeploy/linuxdeploy-plugin-gtk
+          latest: true
+          fileName: linuxdeploy-plugin-gtk-x86_64.AppImage
+          out-file-path: .
+
+      - name: Make executables
+        run: chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-gtk-x86_64.AppImage
 
       - name: Build AppImage
         env:
@@ -64,10 +72,10 @@ jobs:
             --icon-file AppDir/usr/share/icons/hicolor/scalable/apps/easygamma.svg \
             --output appimage
 
-      - name: Rename AppImage with version
+      - name: Rename AppImage
         run: mv EasyGamma*.AppImage EasyGamma-${{ github.ref_name }}-x86_64.AppImage
 
-      - name: Create GitHub Release and upload AppImage
+      - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: EasyGamma-${{ github.ref_name }}-x86_64.AppImage
