@@ -1,0 +1,67 @@
+name: Release AppImage
+
+on:
+  push:
+    tags:
+      - 'v*'          # срабатывает на теги вида v1.0, v1.2.3 и т.д.
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake g++ pkg-config \
+            libgtkmm-3.0-dev \
+            libwayland-dev \
+            wayland-protocols \
+            libayatana-appindicator3-dev \
+            libfuse2
+
+      - name: Configure
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/usr
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Install into AppDir
+        run: DESTDIR=${{ github.workspace }}/AppDir cmake --install build
+
+      - name: Download linuxdeploy + GTK plugin
+        run: |
+          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          wget -q https://github.com/linuxdeploy/linuxdeploy-plugin-gtk/releases/download/continuous/linuxdeploy-plugin-gtk-x86_64.AppImage
+          chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-gtk-x86_64.AppImage
+
+      - name: Build AppImage
+        env:
+          DEPLOY_GTK_VERSION: 3
+          VERSION: ${{ github.ref_name }}
+        run: |
+          ./linuxdeploy-x86_64.AppImage \
+            --appdir AppDir \
+            --plugin gtk \
+            --desktop-file AppDir/usr/share/applications/easygamma.desktop \
+            --icon-file AppDir/usr/share/icons/hicolor/scalable/apps/easygamma.svg \
+            --output appimage
+
+      - name: Rename AppImage with version
+        run: |
+          mv EasyGamma*.AppImage EasyGamma-${{ github.ref_name }}-x86_64.AppImage
+
+      - name: Create GitHub Release and upload AppImage
+        uses: softprops/action-gh-release@v2
+        with:
+          files: EasyGamma-${{ github.ref_name }}-x86_64.AppImage
+          generate_release_notes: true   # авто-генерирует changelog из коммитов
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
